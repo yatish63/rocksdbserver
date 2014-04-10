@@ -26,7 +26,7 @@ class Table(object):
     def __unicode__(self):
         return str(self)
 
-    def open(self):
+    def open(self, prefix_length=None):
         opts = self.define_options()
         opts.create_if_missing = True
         return rocksdb.DB(self.data_dir, opts)
@@ -53,6 +53,17 @@ class Table(object):
         item = msgpack.unpackb(value)
         return item
 
+    def delete(self, key, batch=None):
+        db = batch or self.rdb
+
+        db.delete(key)
+
+    def delete_many(self, keys):
+        batch = rocksdb.WriteBatch()
+        for key in keys:
+            self.delete(key, batch=batch)
+        self.rdb.write(batch)
+
     def put_many(self, data):
         batch = rocksdb.WriteBatch()
         for key, item in data:
@@ -64,6 +75,23 @@ class Table(object):
         for key, value in data.iteritems():
             data[key] = None if value is None else msgpack.unpackb(value)
         return data
+
+    def iteritems(self, prefix):
+        it = self.rdb.iteritems()
+        it.seek_to_first()
+        it = dict(it)
+
+        return it
+
+    def iterkeys(self):
+        it = self.rdb.iterkeys()
+        it.seek_to_first()
+        return list(it)
+
+    def itervalues(self):
+        it = self.rdb.iterkeys()
+        it.seek_to_first()
+        return list(it)
 
 class RocksDBAPI(object):
     def __init__(self, data_dir):
@@ -91,6 +119,26 @@ class RocksDBAPI(object):
     @ensuretable
     def get_many(self, table, keys):
         return table.get_many(keys)
+
+    @ensuretable
+    def delete(self, table, key):
+        return table.delete(key)
+
+    @ensuretable
+    def delete_many(self, table, keys):
+        return table.delete_many(keys)
+
+    @ensuretable
+    def iteritems(self, table, prefix=None):
+        return table.iteritems(prefix)
+
+    @ensuretable
+    def iterkeys(self, table):
+        return table.iterkeys()
+
+    @ensuretable
+    def itervalues(self, table):
+        return table.itervalues()
 
 class RocksDBServer(RPCServer):
     NAME = 'RocksDBServer'
